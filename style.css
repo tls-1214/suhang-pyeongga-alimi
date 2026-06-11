@@ -1,0 +1,491 @@
+/* ───────────────────────────────────────────
+   Reset
+─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ───────────────────────────────────────────
+   CSS Variables – Light (default)
+─────────────────────────────────────────── */
+:root {
+  --primary:            #B3D9FF;
+  --primary-dark:       #6BABDE;
+  --bg:                 #F5F5F5;
+  --surface:            #FFFFFF;
+  --on-surface:         #1C1B1F;
+  --on-surface-dim:     rgba(28,27,31,.58);
+  --on-surface-subtle:  rgba(28,27,31,.36);
+  --error:              #B3001B;
+  --error-bg:           rgba(179,0,27,.1);
+  --card-bg:            rgba(179,217,255,.20);
+  --surface-2:          rgba(179,217,255,.10);
+  --border:             rgba(0,0,0,.09);
+  --shadow:             0 1px 4px rgba(0,0,0,.08);
+  --radius:             12px;
+  --transition:         .2s ease;
+  /* D-Day badges */
+  --dday-bg:            rgba(179,217,255,.30);
+  --dday-color:         #1460A0;
+  --dday-orange-bg:     rgba(230,81,0,.12);
+  --dday-orange-color:  #C84B00;
+  --dday-red-bg:        rgba(179,0,27,.12);
+  --dday-red-color:     #B3001B;
+}
+
+/* ───────────────────────────────────────────
+   CSS Variables – Dark
+─────────────────────────────────────────── */
+[data-dark="true"] {
+  --primary:            #BB86FC;
+  --primary-dark:       #985EDA;
+  --bg:                 #121212;
+  --surface:            #1E1E1E;
+  --on-surface:         #E0E0E0;
+  --on-surface-dim:     rgba(224,224,224,.58);
+  --on-surface-subtle:  rgba(224,224,224,.36);
+  --error:              #CF6679;
+  --error-bg:           rgba(207,102,121,.15);
+  --card-bg:            #2A2A2A;
+  --surface-2:          #252525;
+  --border:             rgba(255,255,255,.10);
+  --shadow:             0 1px 6px rgba(0,0,0,.4);
+  --dday-bg:            rgba(187,134,252,.18);
+  --dday-color:         #BB86FC;
+  --dday-orange-bg:     rgba(255,184,119,.15);
+  --dday-orange-color:  #FFB877;
+  --dday-red-bg:        rgba(207,102,121,.18);
+  --dday-red-color:     #CF6679;
+}
+
+/* ───────────────────────────────────────────
+   Base
+─────────────────────────────────────────── */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR',
+               'Apple SD Gothic Neo', sans-serif;
+  background: var(--bg);
+  color: var(--on-surface);
+  min-height: 100vh;
+  transition: background var(--transition), color var(--transition);
+}
+
+/* ───────────────────────────────────────────
+   App Bar
+─────────────────────────────────────────── */
+.app-bar {
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 60px;
+  background: var(--primary);
+  box-shadow: 0 2px 10px rgba(0,0,0,.15);
+  transition: background var(--transition), box-shadow var(--transition);
+}
+
+.app-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--on-surface);
+  letter-spacing: -.01em;
+}
+
+.app-bar-actions { display: flex; gap: 4px; }
+
+/* ───────────────────────────────────────────
+   Icon Button
+─────────────────────────────────────────── */
+.icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition);
+  color: var(--on-surface);
+  flex-shrink: 0;
+}
+.icon-btn:hover { background: rgba(0,0,0,.08); }
+[data-dark="true"] .icon-btn:hover { background: rgba(255,255,255,.1); }
+
+/* ───────────────────────────────────────────
+   Notification Banner
+─────────────────────────────────────────── */
+.notif-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  font-size: .88rem;
+  color: var(--on-surface-dim);
+}
+.notif-banner button {
+  background: var(--primary);
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--on-surface);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity var(--transition);
+}
+.notif-banner button:hover { opacity: .8; }
+.hidden { display: none !important; }
+
+/* ───────────────────────────────────────────
+   Container
+─────────────────────────────────────────── */
+.container {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 16px 100px;
+}
+
+/* ───────────────────────────────────────────
+   FAB
+─────────────────────────────────────────── */
+.fab {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--on-surface);
+  border: none;
+  font-size: 1.9rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--transition), box-shadow var(--transition),
+              background var(--transition);
+  z-index: 100;
+}
+.fab:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(0,0,0,.28); }
+.fab:active { transform: scale(.96); }
+
+/* ───────────────────────────────────────────
+   Empty State
+─────────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+  user-select: none;
+}
+.empty-icon { font-size: 3.5rem; margin-bottom: 16px; }
+.empty-title { font-size: 1.05rem; color: var(--on-surface-dim); margin-bottom: 6px; }
+.empty-sub { font-size: .88rem; color: var(--on-surface-subtle); }
+
+/* ───────────────────────────────────────────
+   Section Header
+─────────────────────────────────────────── */
+.section-header {
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--on-surface-subtle);
+  padding: 14px 2px 6px;
+}
+
+/* ───────────────────────────────────────────
+   Evaluation Card
+─────────────────────────────────────────── */
+.eval-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 10px 14px 6px;
+  margin-bottom: 8px;
+  transition: background var(--transition), opacity var(--transition),
+              box-shadow var(--transition);
+}
+.eval-card:hover { box-shadow: var(--shadow); }
+.eval-card.completed { opacity: .55; }
+
+.btn-complete {
+  background: none;
+  border: none;
+  font-size: 1.35rem;
+  cursor: pointer;
+  padding: 6px 8px;
+  flex-shrink: 0;
+  line-height: 1;
+  border-radius: 50%;
+  transition: transform var(--transition), background var(--transition);
+}
+.btn-complete:hover { transform: scale(1.2); }
+
+.card-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+.card-subject {
+  font-size: .74rem;
+  font-weight: 600;
+  color: var(--on-surface-dim);
+  letter-spacing: .03em;
+}
+.card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.eval-card.completed .card-title { text-decoration: line-through; }
+.card-date {
+  font-size: .8rem;
+  color: var(--on-surface-dim);
+}
+.card-note {
+  font-size: .76rem;
+  color: var(--on-surface-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.card-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ───────────────────────────────────────────
+   D-Day Badge
+─────────────────────────────────────────── */
+.dday-badge {
+  font-size: .75rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+  letter-spacing: .02em;
+}
+.dday-normal { background: var(--dday-bg);       color: var(--dday-color); }
+.dday-orange { background: var(--dday-orange-bg); color: var(--dday-orange-color); }
+.dday-red    { background: var(--dday-red-bg);    color: var(--dday-red-color); }
+
+/* ───────────────────────────────────────────
+   Card Action Buttons
+─────────────────────────────────────────── */
+.card-actions { display: flex; gap: 2px; }
+.btn-edit, .btn-delete {
+  background: none;
+  border: none;
+  font-size: .9rem;
+  cursor: pointer;
+  padding: 5px 7px;
+  border-radius: 6px;
+  opacity: .55;
+  transition: opacity var(--transition), background var(--transition);
+  line-height: 1;
+}
+.btn-edit:hover, .btn-delete:hover { opacity: 1; background: var(--surface-2); }
+
+/* ───────────────────────────────────────────
+   Buttons (general)
+─────────────────────────────────────────── */
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 22px;
+  font-size: .93rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity var(--transition), background var(--transition);
+}
+.btn-primary  { background: var(--primary);  color: var(--on-surface); }
+.btn-primary:hover { opacity: .82; }
+.btn-secondary {
+  background: transparent;
+  color: var(--on-surface-dim);
+  border: 1.5px solid var(--border);
+}
+.btn-secondary:hover { background: var(--surface-2); }
+.btn-danger { background: var(--error); color: #fff; }
+.btn-danger:hover { opacity: .85; }
+
+/* ───────────────────────────────────────────
+   Modal Overlay
+─────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.48);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 400;
+  padding: 16px;
+  backdrop-filter: blur(3px);
+  animation: fadeIn .15s ease;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.modal {
+  background: var(--surface);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.25);
+  overflow: hidden;
+  animation: slideUp .18s ease;
+}
+@keyframes slideUp {
+  from { transform: translateY(14px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 20px 0;
+}
+.modal-header h2 { font-size: 1.1rem; font-weight: 700; }
+
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 20px 20px;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+/* ───────────────────────────────────────────
+   Form
+─────────────────────────────────────────── */
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group label {
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--on-surface-dim);
+}
+.optional { font-weight: 400; }
+.form-group input,
+.form-group textarea {
+  background: var(--surface-2);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: .95rem;
+  color: var(--on-surface);
+  font-family: inherit;
+  transition: border-color var(--transition);
+  outline: none;
+  width: 100%;
+}
+.form-group input:focus,
+.form-group textarea:focus { border-color: var(--primary-dark); }
+.form-group textarea { resize: vertical; min-height: 80px; }
+
+/* ───────────────────────────────────────────
+   Confirm Dialog
+─────────────────────────────────────────── */
+.dialog { max-width: 380px; padding: 24px; }
+.dialog h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 10px; }
+.dialog p  { font-size: .88rem; color: var(--on-surface-dim); line-height: 1.55;
+             margin-bottom: 20px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ───────────────────────────────────────────
+   Theme Picker
+─────────────────────────────────────────── */
+.theme-modal { max-width: 340px; }
+.theme-swatches {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 20px 20px 8px;
+}
+.swatch {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2.5px solid transparent;
+  cursor: pointer;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--transition), border-color var(--transition);
+}
+.swatch:hover { transform: scale(1.12); }
+.swatch.selected { border-color: var(--on-surface); }
+.theme-hint {
+  text-align: center;
+  font-size: .76rem;
+  color: var(--on-surface-subtle);
+  padding: 0 20px 18px;
+}
+
+/* ───────────────────────────────────────────
+   Toast
+─────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%) translateY(0);
+  background: var(--on-surface);
+  color: var(--surface);
+  padding: 10px 20px;
+  border-radius: 24px;
+  font-size: .88rem;
+  font-weight: 500;
+  box-shadow: 0 4px 14px rgba(0,0,0,.2);
+  z-index: 500;
+  white-space: nowrap;
+  animation: toastIn .2s ease;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ───────────────────────────────────────────
+   Responsive
+─────────────────────────────────────────── */
+@media (max-width: 540px) {
+  .app-bar { padding: 0 14px; }
+  .container { padding: 14px 12px 100px; }
+  .fab { bottom: 20px; right: 20px; width: 52px; height: 52px; }
+  .card-right { flex-direction: row; align-items: center; }
+  .notif-banner { flex-direction: column; align-items: flex-start; gap: 8px; }
+}

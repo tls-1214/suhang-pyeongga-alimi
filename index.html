@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>수행 평가 알리미</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" id="meta-theme" content="#B3D9FF" />
+  <meta name="description" content="수행 평가 일정을 관리하고 전날 알림을 받아보세요" />
+</head>
+<body>
+
+<!-- App Bar -->
+<header class="app-bar" id="app-bar">
+  <span class="app-title">수행 평가 알리미</span>
+  <div class="app-bar-actions">
+    <button class="icon-btn" id="btn-palette" title="테마 색상 선택">🎨</button>
+    <button class="icon-btn" id="btn-dark" title="다크 / 라이트 전환">🌙</button>
+  </div>
+</header>
+
+<!-- Notification Banner -->
+<div class="notif-banner hidden" id="notif-banner">
+  <span>🔔 알림 권한을 허용하면 수행 평가 전날 알림을 받을 수 있어요</span>
+  <button id="btn-allow-notif">허용하기</button>
+</div>
+
+<!-- Main Content -->
+<main class="container">
+  <div id="eval-list"></div>
+</main>
+
+<!-- FAB -->
+<button class="fab" id="btn-add" title="수행 평가 추가 (단축키: N)">＋</button>
+
+<!-- ─── Add / Edit Modal ─── -->
+<div class="modal-overlay hidden" id="modal-overlay"
+     role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-title">수행 평가 추가</h2>
+      <button class="icon-btn" id="modal-close" aria-label="닫기">✕</button>
+    </div>
+    <form id="eval-form" class="modal-body" novalidate>
+      <div class="form-group">
+        <label for="f-subject">과목</label>
+        <input id="f-subject" type="text" placeholder="예: 국어, 수학, 영어"
+               autocomplete="off" required />
+      </div>
+      <div class="form-group">
+        <label for="f-title">평가명</label>
+        <input id="f-title" type="text" placeholder="예: 1학기 독서 발표"
+               autocomplete="off" required />
+      </div>
+      <div class="form-group">
+        <label for="f-date">평가 날짜</label>
+        <input id="f-date" type="date" required />
+      </div>
+      <div class="form-group">
+        <label for="f-note">메모 <span class="optional">(선택)</span></label>
+        <textarea id="f-note" placeholder="준비 사항 등을 메모하세요" rows="3"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="modal-cancel">취소</button>
+        <button type="submit" class="btn btn-primary">저장</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ─── Delete Confirm Dialog ─── -->
+<div class="modal-overlay hidden" id="delete-overlay"
+     role="alertdialog" aria-modal="true">
+  <div class="modal dialog">
+    <h3>삭제 확인</h3>
+    <p id="delete-msg"></p>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="delete-cancel">취소</button>
+      <button class="btn btn-danger" id="delete-confirm">삭제</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Theme Picker ─── -->
+<div class="modal-overlay hidden" id="theme-overlay"
+     role="dialog" aria-modal="true" aria-label="테마 색상 선택">
+  <div class="modal theme-modal">
+    <div class="modal-header">
+      <h2>테마 색상 선택</h2>
+      <button class="icon-btn" id="theme-close" aria-label="닫기">✕</button>
+    </div>
+    <div id="theme-swatches" class="theme-swatches"></div>
+    <p class="theme-hint">라이트 모드에서만 적용됩니다</p>
+  </div>
+</div>
+
+<script src="app.js" type="module"></script>
+</body>
+</html>

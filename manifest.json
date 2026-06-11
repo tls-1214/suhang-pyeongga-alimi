@@ -1,0 +1,18 @@
+{
+  "name": "수행 평가 알리미",
+  "short_name": "수행평가",
+  "description": "수행 평가 일정을 관리하고 전날 알림을 받아보세요",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#F5F5F5",
+  "theme_color": "#B3D9FF",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
