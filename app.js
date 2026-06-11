@@ -42,15 +42,23 @@ let deleteId    = null;
 
 /** DB에서 전체 목록 불러오기 */
 async function fetchEvals() {
-  const { data, error } = await db
-    .from('evaluations')
-    .select('*')
-    .order('date', { ascending: true });
-  if (error) { console.error('fetch error:', error); return; }
-  // DB 컬럼명(snake_case) → 앱 내부 camelCase 매핑
-  evaluations = data.map(dbToApp);
-  rescheduleAll();
-  render();
+  try {
+    const { data, error } = await db
+      .from('evaluations')
+      .select('*')
+      .order('date', { ascending: true });
+    if (error) throw error;
+    evaluations = data.map(dbToApp);
+    cacheToLocal();
+    rescheduleAll();
+    render();
+  } catch (e) {
+    console.error('fetch error:', e);
+    // 실패하면 로컬 캐시로 fallback
+    evaluations = loadFromCache();
+    render();
+    showToast('⚠️ 서버 연결 실패 — 저장된 데이터로 표시 중');
+  }
 }
 
 /** 추가 */
@@ -578,12 +586,13 @@ setupListeners();
 registerSW();
 requestNotifPermission();
 
-// 오프라인이면 캐시로 먼저 보여주고, 온라인이면 DB에서 불러오기
+// 1) 캐시 데이터를 즉시 표시 (로딩 없이 바로 보임)
+evaluations = loadFromCache();
+render();
+
+// 2) 온라인이면 백그라운드에서 DB 최신 데이터로 갱신
 if (!navigator.onLine) {
-  evaluations = loadFromCache();
-  render();
-  showToast('⚠️ 오프라인 — 로컬 캐시로 표시 중');
+  showToast('⚠️ 오프라인 — 저장된 데이터로 표시 중');
 } else {
-  showLoading();
   fetchEvals().then(() => subscribeRealtime());
 }
