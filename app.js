@@ -1,6 +1,15 @@
 // ═══════════════════════════════════════════
-//  수행 평가 알리미 — Web App (ES Module)
+//  수행 평가 알리미 — Supabase 연동 버전
 // ═══════════════════════════════════════════
+
+// ──────────────────────────────────────────
+//  Supabase 초기화
+// ──────────────────────────────────────────
+const SUPABASE_URL  = 'https://aztersewhilaufwoccie.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6dGVyc2V3aGlsYXVmd29jY2llIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExNTQxNDUsImV4cCI6MjA5NjczMDE0NX0.4zDByBNx0HtNFMrx9nCbnHIhHpwzyflIkTQmPKjLocw';
+
+const { createClient } = supabase;   // loaded from CDN UMD bundle
+const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // ──────────────────────────────────────────
 //  Constants
@@ -15,47 +24,167 @@ const PASTELS = [
   { name: '보라', hex: '#DDB3FF', text: '#4B0082' },
 ];
 
-const ALARM_HOURS = [0, 6, 12];
-const ALARM_MESSAGES = (subject, title) => [
-  `내일 ${subject} 수행 평가가 있어요`,
-  `오늘 ${subject} 수행 평가 준비하세요`,
-  `${title} — 오늘 마지막 준비 시간이에요`,
-];
-
 // ──────────────────────────────────────────
 //  State
 // ──────────────────────────────────────────
-let evaluations  = [];
-let themeState   = { dark: false, pastel: 4 };
-let notifTimers  = new Map(); // key: evalId * 10 + alarmIndex → timeoutId
-let editingId    = null;
-let deleteId     = null;
+let evaluations = [];
+let themeState  = { dark: false, pastel: 4 };
+let notifTimers = new Map();
+let editingId   = null;
+let deleteId    = null;
 
 // ──────────────────────────────────────────
-//  Storage
+//  Supabase CRUD
 // ──────────────────────────────────────────
-function loadState() {
-  try {
-    evaluations = JSON.parse(localStorage.getItem('evals')  ?? '[]');
-    themeState  = JSON.parse(localStorage.getItem('theme')  ?? '{"dark":false,"pastel":4}');
-  } catch { /* corrupted — start fresh */ }
+
+/** DB에서 전체 목록 불러오기 */
+async function fetchEvals() {
+  const { data, error } = await db
+    .from('evaluations')
+    .select('*')
+    .order('date', { ascending: true });
+  if (error) { console.error('fetch error:', error); return; }
+  // DB 컬럼명(snake_case) → 앱 내부 camelCase 매핑
+  evaluations = data.map(dbToApp);
+  rescheduleAll();
+  render();
 }
 
-function saveEvals()  { localStorage.setItem('evals',  JSON.stringify(evaluations)); }
-function saveTheme()  { localStorage.setItem('theme',  JSON.stringify(themeState)); }
+/** 추가 */
+async function addEval(data) {
+  const { data: rows, error } = await db
+    .from('evaluations')
+    .insert([appToDb(data)])
+    .select();
+  if (error) { showToast('❌ 저장 실패: ' + error.message); return; }
+  evaluations.push(dbToApp(rows[0]));
+  scheduleNotifs(dbToApp(rows[0]));
+  render();
+  showToast('✅ 수행 평가가 추가됐어요');
+}
 
-function nextId() {
-  return evaluations.length > 0 ? Math.max(...evaluations.map(e => e.id)) + 1 : 1;
+/** 수정 */
+async function updateEval(id, data) {
+  const { error } = await db
+    .from('evaluations')
+    .update(appToDb(data))
+    .eq('id', id);
+  if (error) { showToast('❌ 수정 실패: ' + error.message); return; }
+  const idx = evaluations.findIndex(e => e.id === id);
+  if (idx >= 0) {
+    evaluations[idx] = { ...evaluations[idx], ...data };
+    scheduleNotifs(evaluations[idx]);
+  }
+  render();
+  showToast('✏️ 수정됐어요');
+}
+
+/** 삭제 */
+async function deleteEval(id) {
+  const { error } = await db
+    .from('evaluations')
+    .delete()
+    .eq('id', id);
+  if (error) { showToast('❌ 삭제 실패: ' + error.message); return; }
+  cancelNotifs(id);
+  evaluations = evaluations.filter(e => e.id !== id);
+  render();
+  showToast('🗑️ 삭제됐어요');
+}
+
+/** 완료 토글 */
+async function toggleComplete(id) {
+  const eval_ = evaluations.find(e => e.id === id);
+  if (!eval_) return;
+  const newVal = !eval_.isCompleted;
+  const { error } = await db
+    .from('evaluations')
+    .update({ is_completed: newVal })
+    .eq('id', id);
+  if (error) { showToast('❌ 오류: ' + error.message); return; }
+  eval_.isCompleted = newVal;
+  if (newVal) cancelNotifs(id);
+  else scheduleNotifs(eval_);
+  render();
+}
+
+// DB 컬럼 ↔ 앱 객체 변환
+function dbToApp(row) {
+  return {
+    id:          row.id,
+    subject:     row.subject,
+    title:       row.title,
+    date:        row.date,
+    note:        row.note,
+    isCompleted: row.is_completed,
+  };
+}
+function appToDb(obj) {
+  const row = {};
+  if (obj.subject     !== undefined) row.subject      = obj.subject;
+  if (obj.title       !== undefined) row.title        = obj.title;
+  if (obj.date        !== undefined) row.date         = obj.date;
+  if (obj.note        !== undefined) row.note         = obj.note ?? null;
+  if (obj.isCompleted !== undefined) row.is_completed = obj.isCompleted;
+  return row;
+}
+
+// ──────────────────────────────────────────
+//  실시간 동기화 (Realtime)
+// ──────────────────────────────────────────
+function subscribeRealtime() {
+  db.channel('evaluations-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'evaluations' }, payload => {
+      if (payload.eventType === 'INSERT') {
+        const item = dbToApp(payload.new);
+        if (!evaluations.find(e => e.id === item.id)) {
+          evaluations.push(item);
+          evaluations.sort((a, b) => a.date.localeCompare(b.date));
+          scheduleNotifs(item);
+          render();
+        }
+      } else if (payload.eventType === 'UPDATE') {
+        const idx = evaluations.findIndex(e => e.id === payload.new.id);
+        if (idx >= 0) {
+          evaluations[idx] = dbToApp(payload.new);
+          scheduleNotifs(evaluations[idx]);
+          render();
+        }
+      } else if (payload.eventType === 'DELETE') {
+        cancelNotifs(payload.old.id);
+        evaluations = evaluations.filter(e => e.id !== payload.old.id);
+        render();
+      }
+    })
+    .subscribe();
+}
+
+// ──────────────────────────────────────────
+//  오프라인 fallback (localStorage 캐시)
+// ──────────────────────────────────────────
+function cacheToLocal() {
+  localStorage.setItem('evals_cache', JSON.stringify(evaluations));
+}
+function loadFromCache() {
+  try {
+    const raw = localStorage.getItem('evals_cache');
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
 }
 
 // ──────────────────────────────────────────
 //  Theme
 // ──────────────────────────────────────────
+function loadTheme() {
+  try { return JSON.parse(localStorage.getItem('theme') ?? '{"dark":false,"pastel":4}'); }
+  catch { return { dark: false, pastel: 4 }; }
+}
+function saveTheme() { localStorage.setItem('theme', JSON.stringify(themeState)); }
+
 function applyTheme() {
   const root   = document.documentElement;
   const isDark = themeState.dark;
   root.dataset.dark = isDark;
-
   if (!isDark) {
     const p = PASTELS[themeState.pastel];
     root.style.setProperty('--primary',      p.hex);
@@ -66,37 +195,23 @@ function applyTheme() {
     root.style.setProperty('--dday-color',   p.text);
     document.getElementById('meta-theme')?.setAttribute('content', p.hex);
   } else {
-    root.style.removeProperty('--primary');
-    root.style.removeProperty('--primary-dark');
-    root.style.removeProperty('--card-bg');
-    root.style.removeProperty('--surface-2');
-    root.style.removeProperty('--dday-bg');
-    root.style.removeProperty('--dday-color');
+    ['--primary','--primary-dark','--card-bg','--surface-2','--dday-bg','--dday-color']
+      .forEach(v => root.style.removeProperty(v));
     document.getElementById('meta-theme')?.setAttribute('content', '#1E1E1E');
   }
-
-  // Palette button only visible in light mode
   el('btn-palette').style.display = isDark ? 'none' : '';
   el('btn-dark').textContent = isDark ? '☀️' : '🌙';
-  el('btn-dark').title = isDark ? '라이트 모드로 전환' : '다크 모드로 전환';
 }
 
 function hexAlpha(hex, a) {
-  const [r, g, b] = parseHex(hex);
+  const [r,g,b] = parseHex(hex);
   return `rgba(${r},${g},${b},${a})`;
 }
-
 function darken(hex, f) {
-  const [r, g, b] = parseHex(hex).map(v => Math.round(v * f));
-  return `rgb(${r},${g},${b})`;
+  return `rgb(${parseHex(hex).map(v => Math.round(v*f)).join(',')})`;
 }
-
 function parseHex(hex) {
-  return [
-    parseInt(hex.slice(1,3), 16),
-    parseInt(hex.slice(3,5), 16),
-    parseInt(hex.slice(5,7), 16),
-  ];
+  return [1,3,5].map(i => parseInt(hex.slice(i, i+2), 16));
 }
 
 // ──────────────────────────────────────────
@@ -104,53 +219,44 @@ function parseHex(hex) {
 // ──────────────────────────────────────────
 async function requestNotifPermission() {
   if (!('Notification' in window)) return;
-  if (Notification.permission === 'granted') return;
-  if (Notification.permission === 'denied')  return;
-  el('notif-banner').classList.remove('hidden');
+  if (Notification.permission === 'default')
+    el('notif-banner').classList.remove('hidden');
+  if (Notification.permission === 'granted')
+    el('notif-banner').classList.add('hidden');
 }
 
 async function grantNotifPermission() {
-  const result = await Notification.requestPermission();
+  const r = await Notification.requestPermission();
   el('notif-banner').classList.add('hidden');
-  if (result === 'granted') {
-    showToast('🔔 알림이 허용됐어요');
-    rescheduleAll();
-  }
+  if (r === 'granted') { showToast('🔔 알림이 허용됐어요'); rescheduleAll(); }
 }
 
 function cancelNotifs(evalId) {
   for (let i = 0; i < 3; i++) {
-    const key = evalId * 10 + i;
-    const tid = notifTimers.get(key);
-    if (tid !== undefined) { clearTimeout(tid); notifTimers.delete(key); }
+    const tid = notifTimers.get(evalId * 10 + i);
+    if (tid !== undefined) { clearTimeout(tid); notifTimers.delete(evalId * 10 + i); }
   }
 }
 
 function scheduleNotifs(evaluation) {
   cancelNotifs(evaluation.id);
-  if (evaluation.isCompleted) return;
-  if (Notification.permission !== 'granted') return;
-
+  if (evaluation.isCompleted || Notification.permission !== 'granted') return;
   const [y, m, d] = evaluation.date.split('-').map(Number);
-  // Alarm fires on the day BEFORE the evaluation
   const prevDay = new Date(y, m - 1, d - 1);
-
-  const msgs = ALARM_MESSAGES(evaluation.subject, evaluation.title);
-  ALARM_HOURS.forEach((hour, idx) => {
-    const fire = new Date(prevDay.getFullYear(), prevDay.getMonth(), prevDay.getDate(), hour, 0, 0);
+  const msgs = [
+    `내일 ${evaluation.subject} 수행 평가가 있어요`,
+    `오늘 ${evaluation.subject} 수행 평가 준비하세요`,
+    `${evaluation.title} — 오늘 마지막 준비 시간이에요`,
+  ];
+  [0, 6, 12].forEach((hour, idx) => {
+    const fire  = new Date(prevDay.getFullYear(), prevDay.getMonth(), prevDay.getDate(), hour);
     const delay = fire.getTime() - Date.now();
-    // setTimeout max is ~24.8 days; skip past alarms; skip alarms more than 20 days out
-    if (delay <= 0 || delay > 20 * 86400 * 1000) return;
-
+    if (delay <= 0 || delay > 20 * 86400_000) return;
     const tid = setTimeout(() => {
       new Notification(`수행 평가 알림 · ${evaluation.subject}`, {
-        body:    msgs[idx],
-        icon:    'icon.svg',
-        tag:     `eval-${evaluation.id}-${idx}`,
-        silent:  false,
+        body: msgs[idx], icon: './icon.svg', tag: `eval-${evaluation.id}-${idx}`,
       });
     }, delay);
-
     notifTimers.set(evaluation.id * 10 + idx, tid);
   });
 }
@@ -162,92 +268,43 @@ function rescheduleAll() {
 }
 
 // ──────────────────────────────────────────
-//  Date Utilities
+//  Date utils
 // ──────────────────────────────────────────
 function parseDateLocal(str) {
-  // Avoid UTC-shift: parse YYYY-MM-DD as local time
   const [y, m, d] = str.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
-
 function getDDay(dateStr) {
-  const evalDate = parseDateLocal(dateStr);
-  const today    = todayMidnight();
-  const diff     = Math.round((evalDate - today) / 86400000);
+  const diff = Math.round((parseDateLocal(dateStr) - todayMidnight()) / 86400000);
   if (diff === 0) return 'D-Day';
   return diff > 0 ? `D-${diff}` : `D+${Math.abs(diff)}`;
 }
-
 function getDDayClass(dateStr) {
   const diff = Math.round((parseDateLocal(dateStr) - todayMidnight()) / 86400000);
   if (diff <= 0) return 'dday-red';
   if (diff <= 3) return 'dday-orange';
   return 'dday-normal';
 }
-
 function formatDate(dateStr) {
   return parseDateLocal(dateStr).toLocaleDateString('ko-KR', {
     month: 'long', day: 'numeric', weekday: 'short',
   });
 }
-
 function todayMidnight() {
-  const t = new Date();
-  t.setHours(0, 0, 0, 0);
-  return t;
+  const t = new Date(); t.setHours(0,0,0,0); return t;
 }
-
 function todayISO() {
-  return todayMidnight().toISOString().slice(0, 10);
-}
-
-// ──────────────────────────────────────────
-//  CRUD
-// ──────────────────────────────────────────
-function addEval(data) {
-  const evaluation = { id: nextId(), ...data, isCompleted: false };
-  evaluations.push(evaluation);
-  saveEvals();
-  scheduleNotifs(evaluation);
-  render();
-  showToast('✅ 수행 평가가 추가됐어요');
-}
-
-function updateEval(id, data) {
-  const idx = evaluations.findIndex(e => e.id === id);
-  if (idx < 0) return;
-  evaluations[idx] = { ...evaluations[idx], ...data };
-  saveEvals();
-  scheduleNotifs(evaluations[idx]);
-  render();
-  showToast('✏️ 수정됐어요');
-}
-
-function deleteEval(id) {
-  cancelNotifs(id);
-  evaluations = evaluations.filter(e => e.id !== id);
-  saveEvals();
-  render();
-  showToast('🗑️ 삭제됐어요');
-}
-
-function toggleComplete(id) {
-  const idx = evaluations.findIndex(e => e.id === id);
-  if (idx < 0) return;
-  evaluations[idx] = { ...evaluations[idx], isCompleted: !evaluations[idx].isCompleted };
-  saveEvals();
-  if (evaluations[idx].isCompleted) cancelNotifs(id);
-  else scheduleNotifs(evaluations[idx]);
-  render();
+  return todayMidnight().toISOString().slice(0,10);
 }
 
 // ──────────────────────────────────────────
 //  Rendering
 // ──────────────────────────────────────────
 function render() {
+  cacheToLocal();
   const list    = el('eval-list');
-  const pending = evaluations.filter(e => !e.isCompleted).sort(byDate);
-  const done    = evaluations.filter(e =>  e.isCompleted).sort(byDate);
+  const pending = evaluations.filter(e => !e.isCompleted);
+  const done    = evaluations.filter(e =>  e.isCompleted);
 
   if (evaluations.length === 0) {
     list.innerHTML = `
@@ -270,26 +327,24 @@ function render() {
   }
   list.innerHTML = html;
 
-  // Attach event listeners to dynamically-created buttons
-  list.querySelectorAll('.btn-complete').forEach(btn => {
-    btn.addEventListener('click', () => toggleComplete(+btn.dataset.id));
-  });
-  list.querySelectorAll('.btn-edit').forEach(btn => {
-    btn.addEventListener('click', () => openEditModal(+btn.dataset.id));
-  });
-  list.querySelectorAll('.btn-delete').forEach(btn => {
-    btn.addEventListener('click', () => openDeleteConfirm(+btn.dataset.id));
-  });
+  list.querySelectorAll('.btn-complete').forEach(btn =>
+    btn.addEventListener('click', () => toggleComplete(+btn.dataset.id))
+  );
+  list.querySelectorAll('.btn-edit').forEach(btn =>
+    btn.addEventListener('click', () => openEditModal(+btn.dataset.id))
+  );
+  list.querySelectorAll('.btn-delete').forEach(btn =>
+    btn.addEventListener('click', () => openDeleteConfirm(+btn.dataset.id))
+  );
 }
 
 function renderCard(e) {
-  const dday    = getDDay(e.date);
-  const dclass  = getDDayClass(e.date);
-  const label   = formatDate(e.date);
+  const dday   = getDDay(e.date);
+  const dclass = getDDayClass(e.date);
+  const label  = formatDate(e.date);
   const ddayHtml = e.isCompleted ? '' :
     `<span class="dday-badge ${dclass}">${h(dday)}</span>`;
   const noteHtml = e.note ? `<span class="card-note">${h(e.note)}</span>` : '';
-
   return `
     <div class="eval-card ${e.isCompleted ? 'completed' : ''}" data-id="${e.id}">
       <button class="btn-complete" data-id="${e.id}"
@@ -313,32 +368,7 @@ function renderCard(e) {
 }
 
 // ──────────────────────────────────────────
-//  Theme Picker
-// ──────────────────────────────────────────
-function openThemePicker() {
-  renderSwatches();
-  show('theme-overlay');
-}
-
-function renderSwatches() {
-  el('theme-swatches').innerHTML = PASTELS.map((p, i) => `
-    <button class="swatch ${themeState.pastel === i ? 'selected' : ''}"
-            data-i="${i}" style="background:${p.hex};" title="${p.name}">
-      ${themeState.pastel === i ? '✓' : ''}
-    </button>`).join('');
-
-  el('theme-swatches').querySelectorAll('.swatch').forEach(btn => {
-    btn.addEventListener('click', () => {
-      themeState.pastel = +btn.dataset.i;
-      saveTheme();
-      applyTheme();
-      renderSwatches();
-    });
-  });
-}
-
-// ──────────────────────────────────────────
-//  Add / Edit Modal
+//  Modals
 // ──────────────────────────────────────────
 function openAddModal() {
   editingId = null;
@@ -364,24 +394,33 @@ function openEditModal(id) {
   el('f-subject').focus();
 }
 
-function closeModal() {
-  hide('modal-overlay');
-  editingId = null;
-}
+function closeModal() { hide('modal-overlay'); editingId = null; }
 
-// ──────────────────────────────────────────
-//  Delete Confirm
-// ──────────────────────────────────────────
 function openDeleteConfirm(id) {
   const e = evaluations.find(ev => ev.id === id);
   if (!e) return;
   deleteId = id;
   el('delete-msg').textContent =
-    `'${e.subject} — ${e.title}'을(를) 삭제할까요?\n알림도 함께 취소됩니다.`;
+    `'${e.subject} — ${e.title}'을(를) 삭제할까요? 알림도 함께 취소됩니다.`;
   show('delete-overlay');
 }
-
 function closeDeleteConfirm() { hide('delete-overlay'); deleteId = null; }
+
+function openThemePicker() { renderSwatches(); show('theme-overlay'); }
+
+function renderSwatches() {
+  el('theme-swatches').innerHTML = PASTELS.map((p, i) => `
+    <button class="swatch ${themeState.pastel === i ? 'selected' : ''}"
+            data-i="${i}" style="background:${p.hex};" title="${p.name}">
+      ${themeState.pastel === i ? '✓' : ''}
+    </button>`).join('');
+  el('theme-swatches').querySelectorAll('.swatch').forEach(btn =>
+    btn.addEventListener('click', () => {
+      themeState.pastel = +btn.dataset.i;
+      saveTheme(); applyTheme(); renderSwatches();
+    })
+  );
+}
 
 // ──────────────────────────────────────────
 //  Toast
@@ -390,35 +429,35 @@ let toastTimer;
 function showToast(msg) {
   clearTimeout(toastTimer);
   document.querySelectorAll('.toast').forEach(t => t.remove());
-  const toast = document.createElement('div');
-  toast.className = 'toast';
-  toast.textContent = msg;
-  document.body.appendChild(toast);
-  toastTimer = setTimeout(() => toast.remove(), 2200);
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  toastTimer = setTimeout(() => t.remove(), 2400);
+}
+
+// ──────────────────────────────────────────
+//  로딩 스피너
+// ──────────────────────────────────────────
+function showLoading() {
+  el('eval-list').innerHTML = `
+    <div class="empty-state">
+      <div class="spinner"></div>
+      <p class="empty-title" style="margin-top:16px">데이터 불러오는 중…</p>
+    </div>`;
 }
 
 // ──────────────────────────────────────────
 //  Event Listeners
 // ──────────────────────────────────────────
 function setupListeners() {
-  // FAB
   el('btn-add').addEventListener('click', openAddModal);
-
-  // Dark mode
   el('btn-dark').addEventListener('click', () => {
-    themeState.dark = !themeState.dark;
-    saveTheme();
-    applyTheme();
+    themeState.dark = !themeState.dark; saveTheme(); applyTheme();
   });
-
-  // Palette
   el('btn-palette').addEventListener('click', openThemePicker);
-
-  // Notification allow
   el('btn-allow-notif').addEventListener('click', grantNotifPermission);
 
-  // Add/Edit form submit
-  el('eval-form').addEventListener('submit', e => {
+  el('eval-form').addEventListener('submit', async e => {
     e.preventDefault();
     const data = {
       subject: el('f-subject').value.trim(),
@@ -427,9 +466,9 @@ function setupListeners() {
       note:    el('f-note').value.trim() || null,
     };
     if (!data.subject || !data.title || !data.date) return;
-    if (editingId !== null) updateEval(editingId, data);
-    else addEval(data);
     closeModal();
+    if (editingId !== null) await updateEval(editingId, data);
+    else await addEval(data);
   });
 
   el('modal-close').addEventListener('click', closeModal);
@@ -438,42 +477,39 @@ function setupListeners() {
     if (e.target === el('modal-overlay')) closeModal();
   });
 
-  // Delete confirm
   el('delete-cancel').addEventListener('click', closeDeleteConfirm);
-  el('delete-confirm').addEventListener('click', () => {
-    if (deleteId !== null) deleteEval(deleteId);
+  el('delete-confirm').addEventListener('click', async () => {
+    if (deleteId !== null) await deleteEval(deleteId);
     closeDeleteConfirm();
   });
   el('delete-overlay').addEventListener('click', e => {
     if (e.target === el('delete-overlay')) closeDeleteConfirm();
   });
 
-  // Theme picker
   el('theme-close').addEventListener('click', () => hide('theme-overlay'));
   el('theme-overlay').addEventListener('click', e => {
     if (e.target === el('theme-overlay')) hide('theme-overlay');
   });
 
-  // Keyboard shortcuts
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      closeModal();
-      closeDeleteConfirm();
-      hide('theme-overlay');
-      return;
+      closeModal(); closeDeleteConfirm(); hide('theme-overlay'); return;
     }
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     if (e.key === 'n' || e.key === 'N') openAddModal();
   });
+
+  // 오프라인 ↔ 온라인 감지
+  window.addEventListener('online',  () => { showToast('🌐 온라인 연결됨 — 데이터 동기화 중'); fetchEvals(); });
+  window.addEventListener('offline', () => showToast('⚠️ 오프라인 — 로컬 캐시로 표시 중'));
 }
 
 // ──────────────────────────────────────────
-//  Service Worker (PWA)
+//  PWA
 // ──────────────────────────────────────────
 function registerSW() {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {/* silent */});
-  }
+  if ('serviceWorker' in navigator)
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 
 // ──────────────────────────────────────────
@@ -482,8 +518,6 @@ function registerSW() {
 const el   = id => document.getElementById(id);
 const show = id => el(id).classList.remove('hidden');
 const hide = id => el(id).classList.add('hidden');
-const byDate = (a, b) => a.date.localeCompare(b.date);
-
 function h(str) {
   return String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
@@ -493,14 +527,18 @@ function h(str) {
 // ──────────────────────────────────────────
 //  Init
 // ──────────────────────────────────────────
-loadState();
+themeState = loadTheme();
 applyTheme();
 setupListeners();
 registerSW();
 requestNotifPermission();
-render();
 
-// Re-check notification banner after permission changes
-if ('Notification' in window && Notification.permission === 'granted') {
-  rescheduleAll();
+// 오프라인이면 캐시로 먼저 보여주고, 온라인이면 DB에서 불러오기
+if (!navigator.onLine) {
+  evaluations = loadFromCache();
+  render();
+  showToast('⚠️ 오프라인 — 로컬 캐시로 표시 중');
+} else {
+  showLoading();
+  fetchEvals().then(() => subscribeRealtime());
 }
