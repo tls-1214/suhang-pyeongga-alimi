@@ -1,6 +1,14 @@
 // Service Worker — 수행 평가 알리미
 const CACHE_NAME = 'eval-reminder-v1';
-const ASSETS = ['/', '/index.html', '/style.css', '/app.js', '/manifest.json'];
+// 상대경로 사용 — GitHub Pages 서브경로에서도 동작
+const ASSETS = [
+  './',
+  './index.html',
+  './style.css',
+  './app.js',
+  './manifest.json',
+  './icon.svg',
+];
 
 self.addEventListener('install', event => {
   event.waitUntil(
