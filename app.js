@@ -8,6 +8,9 @@
 const SUPABASE_URL  = 'https://aztersewhilaufwoccie.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6dGVyc2V3aGlsYXVmd29jY2llIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExNTQxNDUsImV4cCI6MjA5NjczMDE0NX0.4zDByBNx0HtNFMrx9nCbnHIhHpwzyflIkTQmPKjLocw';
 
+// Web Push VAPID 공개키
+const VAPID_PUBLIC_KEY = 'BJgAZCbkMIQ63tgE5T_9b6Tdq_IxQ-BJxQi8nxp8GiuzNaYC1ZlPG_HqdRwdVMKDZ9jxQH6lXfQLP4qNn34XGDg';
+
 const { createClient } = supabase;   // loaded from CDN UMD bundle
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 
@@ -221,14 +224,52 @@ async function requestNotifPermission() {
   if (!('Notification' in window)) return;
   if (Notification.permission === 'default')
     el('notif-banner').classList.remove('hidden');
-  if (Notification.permission === 'granted')
+  if (Notification.permission === 'granted') {
     el('notif-banner').classList.add('hidden');
+    subscribePush();  // 이미 허용된 경우 바로 구독
+  }
 }
 
 async function grantNotifPermission() {
   const r = await Notification.requestPermission();
   el('notif-banner').classList.add('hidden');
-  if (r === 'granted') { showToast('🔔 알림이 허용됐어요'); rescheduleAll(); }
+  if (r === 'granted') {
+    showToast('🔔 알림이 허용됐어요');
+    rescheduleAll();
+    await subscribePush();  // 서버 푸시 구독 등록
+  }
+}
+
+// ──────────────────────────────────────────
+//  Web Push 구독 등록 (서버 → 기기 알림)
+// ──────────────────────────────────────────
+function urlBase64ToUint8Array(b64) {
+  const pad = '='.repeat((4 - b64.length % 4) % 4);
+  const str = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...str].map(c => c.charCodeAt(0)));
+}
+
+async function subscribePush() {
+  if (!('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+    }
+    const j = sub.toJSON();
+    // Supabase push_subscriptions 테이블에 저장 (중복 시 무시)
+    await db.from('push_subscriptions').upsert([{
+      endpoint: j.endpoint,
+      p256dh:   j.keys.p256dh,
+      auth:     j.keys.auth,
+    }], { onConflict: 'endpoint', ignoreDuplicates: true });
+  } catch (e) {
+    console.warn('Push subscription failed:', e);
+  }
 }
 
 function cancelNotifs(evalId) {
@@ -507,9 +548,13 @@ function setupListeners() {
 // ──────────────────────────────────────────
 //  PWA
 // ──────────────────────────────────────────
-function registerSW() {
-  if ('serviceWorker' in navigator)
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+async function registerSW() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    await navigator.serviceWorker.register('./sw.js');
+  } catch (e) {
+    console.warn('SW registration failed:', e);
+  }
 }
 
 // ──────────────────────────────────────────

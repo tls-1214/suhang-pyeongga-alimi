@@ -1,0 +1,31 @@
+name: Send Evaluation Notifications
+
+# KST(UTC+9) 기준 D-1일 00:00, 06:00, 12:00에 알림 전송
+# UTC 기준: 15:00, 21:00, 03:00
+on:
+  schedule:
+    - cron: '0 15 * * *'   # KST 00:00
+    - cron: '0 21 * * *'   # KST 06:00
+    - cron: '0 3 * * *'    # KST 12:00
+  workflow_dispatch:        # 대시보드에서 수동 테스트 가능
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call Supabase Edge Function
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            https://aztersewhilaufwoccie.supabase.co/functions/v1/send-notifications)
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | head -1)
+          echo "Status: $http_code"
+          echo "Response: $body"
+          if [ "$http_code" != "200" ]; then
+            echo "::error::Edge Function returned $http_code"
+            exit 1
+          fi
